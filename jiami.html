@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>互传密信大挑战 - AES版</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            max-width: 800px;
+            margin: 20px auto;
+            padding: 20px;
+            background-color: #f0f2f5;
+        }
+
+        .container {
+            background: white;
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        h1 {
+            color: #2c3e50;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .split-layout {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 25px;
+            margin-top: 20px;
+        }
+
+        textarea {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #ddd;
+            border-radius: 6px;
+            margin: 8px 0;
+            resize: vertical;
+            min-height: 100px;
+        }
+
+        .control-group {
+            margin: 15px 0;
+        }
+
+        label {
+            display: block;
+            margin: 10px 0 5px;
+            color: #34495e;
+            font-weight: 500;
+        }
+
+        input[type="text"], select {
+            width: 100%;
+            padding: 8px;
+            border: 2px solid #ddd;
+            border-radius: 4px;
+            margin-bottom: 10px;
+        }
+
+        .iv-container {
+            display: none;
+        }
+
+        .status {
+            color: #666;
+            font-size: 0.9em;
+            margin-top: 10px;
+        }
+
+        .error {
+            color: #e74c3c;
+            font-weight: bold;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        button {
+            padding: 8px 15px;
+            border: none;
+            border-radius: 4px;
+            background: #3498db;
+            color: white;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #2980b9;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔐 互传密信大挑战 - AES加密版 🔓</h1>
+        
+        <div class="split-layout">
+            <div>
+                <h3>📜 明文</h3>
+                <textarea id="plaintext" placeholder="输入要加密的明文..."></textarea>
+            </div>
+            
+            <div>
+                <h3>🔒 密文</h3>
+                <textarea id="ciphertext" placeholder="输入要解密的密文..."></textarea>
+            </div>
+        </div>
+
+        <div class="control-group">
+            <label>加密密钥：</label>
+            <input type="text" id="key" placeholder="输入16/24/32字节的密钥">
+            
+            <div class="action-buttons">
+                <button onclick="generateRandomKey()">生成随机密钥</button>
+                <button onclick="toggleKeyVisibility()">显示/隐藏</button>
+            </div>
+        </div>
+
+        <div class="control-group">
+            <label>加密模式：</label>
+            <select id="mode" onchange="toggleIV()">
+                <option value="CBC">CBC模式</option>
+                <option value="ECB">ECB模式</option>
+            </select>
+        </div>
+
+        <div class="control-group iv-container" id="ivGroup">
+            <label>初始化向量 (IV)：</label>
+            <input type="text" id="iv" placeholder="输入16字节IV（CBC模式需要）">
+            <button onclick="generateRandomIV()">生成随机IV</button>
+        </div>
+
+        <div class="control-group">
+            <div id="status" class="status"></div>
+            <div id="error" class="error"></div>
+        </div>
+    </div>
+
+    <script>
+        let isUpdating = false;
+        let lastUpdated = 'plain';
+
+        // 生成随机密钥
+        function generateRandomKey() {
+            const keyLength = document.querySelector('#key').value.length || 32;
+            const randomKey = CryptoJS.lib.WordArray.random(keyLength).toString();
+            document.getElementById('key').value = randomKey;
+            updateCrypto();
+        }
+
+        // 生成随机IV
+        function generateRandomIV() {
+            const randomIV = CryptoJS.lib.WordArray.random(16).toString();
+            document.getElementById('iv').value = randomIV;
+            updateCrypto();
+        }
+
+        // 切换密钥可见性
+        function toggleKeyVisibility() {
+            const keyInput = document.getElementById('key');
+            keyInput.type = keyInput.type === 'password' ? 'text' : 'password';
+        }
+
+        // 切换IV显示
+        function toggleIV() {
+            const mode = document.getElementById('mode').value;
+            document.getElementById('ivGroup').style.display = 
+                mode === 'CBC' ? 'block' : 'none';
+        }
+
+        // AES加密
+        function encryptText(text, key, mode, iv) {
+            try {
+                const keyHash = CryptoJS.enc.Utf8.parse(key);
+                const cfg = { mode: CryptoJS.mode[mode] };
+                
+                if (mode === 'CBC') {
+                    cfg.iv = CryptoJS.enc.Utf8.parse(iv);
+                }
+
+                return CryptoJS.AES.encrypt(text, keyHash, cfg).toString();
+            } catch (error) {
+                showError('加密失败：' + error.message);
+                return '';
+            }
+        }
+
+        // AES解密
+        function decryptText(ciphertext, key, mode, iv) {
+            try {
+                const keyHash = CryptoJS.enc.Utf8.parse(key);
+                const cfg = { mode: CryptoJS.mode[mode] };
+                
+                if (mode === 'CBC') {
+                    cfg.iv = CryptoJS.enc.Utf8.parse(iv);
+                }
+
+                const bytes = CryptoJS.AES.decrypt(ciphertext, keyHash, cfg);
+                return bytes.toString(CryptoJS.enc.Utf8);
+            } catch (error) {
+                showError('解密失败：' + error.message);
+                return '';
+            }
+        }
+
+        // 更新加密状态
+        function updateCrypto() {
+            if (isUpdating) return;
+            isUpdating = true;
+
+            const key = document.getElementById('key').value;
+            const mode = document.getElementById('mode').value;
+            const iv = document.getElementById('iv').value;
+            clearError();
+
+            try {
+                if (lastUpdated === 'plain') {
+                    const plainText = document.getElementById('plaintext').value;
+                    const encrypted = encryptText(plainText, key, mode, iv);
+                    document.getElementById('ciphertext').value = encrypted;
+                    document.getElementById('status').textContent = "加密完成";
+                } else {
+                    const cipherText = document.getElementById('ciphertext').value;
+                    const decrypted = decryptText(cipherText, key, mode, iv);
+                    document.getElementById('plaintext').value = decrypted;
+                    document.getElementById('status').textContent = "解密完成";
+                }
+            } finally {
+                isUpdating = false;
+            }
+        }
+
+        // 错误处理
+        function showError(message) {
+            document.getElementById('error').textContent = message;
+            setTimeout(clearError, 3000);
+        }
+
+        function clearError() {
+            document.getElementById('error').textContent = '';
+        }
+
+        // 事件监听
+        document.getElementById('plaintext').addEventListener('input', () => {
+            lastUpdated = 'plain';
+            updateCrypto();
+        });
+
+        document.getElementById('ciphertext').addEventListener('input', () => {
+            lastUpdated = 'cipher';
+            updateCrypto();
+        });
+
+        document.getElementById('key').addEventListener('input', updateCrypto);
+        document.getElementById('mode').addEventListener('change', updateCrypto);
+        document.getElementById('iv').addEventListener('input', updateCrypto);
+
+        // 初始化
+        toggleIV();
+    </script>
+</body>
+</html>
